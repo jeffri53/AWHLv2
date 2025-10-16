@@ -12,7 +12,8 @@
   "homepage": "https://jeffri53.github.io/AWHLv2",
   "scripts": {
     "prepublish": "npm run build",
-    "build": "cross-env NODE_OPTIONS=--openssl-legacy-provider tsc && webpack",
+    "build": "cross-env NODE_OPTIONS=--openssl-legacy-provider npx tsc && webpack",
+    
     "predeploy": "npm run build",
     "deploy": "gh-pages -d dist"
   },
