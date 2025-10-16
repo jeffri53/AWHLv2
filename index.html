@@ -1,0 +1,437 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta charset="utf-8" />
+  <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+  <title>HexUpLoader ver. 1.0</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <script src="https://github.com/dbuezas/arduino-web-uploader/releases/download/v1.1.2/main.js"></script>
+</head>
+
+<body>
+  <h1>
+      <div style="text-align:center; margin:20px;">
+        <img src="src/images.png" alt="logo" width="250">
+        <h3>OlegProGGer <br>Andrusha koDDer<br> HEX Uploader</h3>
+      </div>
+      
+  </h1>
+ 
+
+<!-- <script>
+        function prisvATRIBUT()
+        {
+            var hexsex = gebi("select_file").value;
+            if(hexsex=="findPC")
+            {
+                gebi("hexFile").style.display="block";
+               hexsex = ":"+gebi("hexFile").value;
+            }
+            else
+            {
+                gebi("hexFile").style.display="none";
+            }
+            console.log("hexsex="+hexsex);
+            gebi("hexx").setAttribute("hex-href",hexsex);
+            
+            var boardsex = gebi("select_board").value;
+            console.log("boardsex="+boardsex);
+            gebi("hexx").setAttribute("board",boardsex);
+        }
+        function gebi(id){return document.getElementById(id)}
+</script> -->
+
+<script>
+  function gebi(id){ return document.getElementById(id); }
+
+  // Храним текущий blob URL чтобы отозвать при следующем создании
+  let currentHexBlobURL = null;
+
+  async function prisvATRIBUT() {
+    const select = gebi("select_file");
+    const fileInput = gebi("hexFile");
+    const hexxBtn = gebi("hexx");
+
+    // Отозвать предыдущий blob, если был
+    if (currentHexBlobURL) {
+      try { URL.revokeObjectURL(currentHexBlobURL); } catch(e){/*ignore*/ }
+      currentHexBlobURL = null;
+    }
+
+    const value = select.value;
+    if (value === "findPC") {
+      // Показываем input и ждём выбора файла
+      fileInput.style.display = "block";
+
+      // если файл уже выбран — сразу обработаем
+      if (fileInput.files && fileInput.files[0]) {
+        await handleFileAndSetBlob(fileInput.files[0]);
+      }
+
+      // set onchange to process selection
+      fileInput.onchange = async () => {
+        if (fileInput.files && fileInput.files[0]) {
+          await handleFileAndSetBlob(fileInput.files[0]);
+        }
+      };
+
+    } else if (value && (value.endsWith('.hex') || value.startsWith('./') || value.startsWith('/'))) {
+      // Предопределённый путь (./test/xyz.hex) — загрузим его fetch + сделаем blob
+      fileInput.style.display = "none";
+      try {
+        const resp = await fetch(value, { cache: "no-store" });
+        if (!resp.ok) throw new Error("Fetch failed: " + resp.status);
+        let text = await resp.text();
+        text = normalizeHexText(text);
+        setHexBlobFromText(text);
+        console.log("Loaded preset hex from", value, "len=", text.length);
+      } catch (e) {
+        console.error("Ошибка загрузки preset hex:", e);
+        alert("Ошибка загрузки preset hex: " + e.message);
+        // как fallback — укажем просто путь (если библиотека умеет работать с относительными URL)
+        hexxBtn.setAttribute("hex-href", value);
+      }
+
+    } else {
+      // Нет выбора — скрыть input и очистить атрибут
+      fileInput.style.display = "none";
+      hexxBtn.removeAttribute("hex-href");
+    }
+
+    // board selection
+    const boardsex = gebi("select_board").value;
+    hexxBtn.setAttribute("board", boardsex);
+    console.log("boardsex=", boardsex);
+  }
+
+  // Читает File объект, нормализует текст и создаёт blob URL
+  async function handleFileAndSetBlob(file) {
+    const hexxBtn = gebi("hexx");
+    try {
+      let text = await file.text();
+      text = normalizeHexText(text);
+      setHexBlobFromText(text);
+      console.log("Loaded local file:", file.name, "len=", text.length);
+      // уведомим библиотеку, если она слушает событие change
+      hexxBtn.dispatchEvent(new Event("change"));
+    } catch (e) {
+      console.error("Ошибка чтения файла:", e);
+      alert("Ошибка чтения файла: " + e.message);
+    }
+  }
+
+  // Нормализация: удаляем BOM, переводим CRLF -> LF, убираем лишние пробелы в конце/начале
+  function normalizeHexText(text) {
+    if (!text) return text;
+    // удалить возможный BOM
+    text = text.replace(/^\uFEFF/, '');
+    // Переводы строк в unix-стиль
+    text = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+    // Убрать пустые строки вверх/вниз и лишние пробелы по краям строк
+    text = text.split('\n').map(line => line.trimRight()).join('\n').trim();
+    return text + '\n'; // гарантируем завершающий перевод строки
+  }
+
+  // Создаёт blob URL и ставит его в атрибут hex-href
+  function setHexBlobFromText(text) {
+    const hexxBtn = gebi("hexx");
+    // Safety: убедимся, что первая значимая буква ":" — если нет, покажем предупреждение
+    const firstCharCode = text.charCodeAt(0);
+    if (firstCharCode !== 58) { // 58 == ':'
+      console.warn("Первый символ файла не ':' (код " + firstCharCode + "). Проверь содержимое.");
+      // не останавливаем, всё равно создаём blob, чтобы библиотека попыталась распарсить
+    }
+
+    // Создаём blob, указываем тип text/plain
+    const blob = new Blob([text], { type: 'text/plain' });
+    currentHexBlobURL = URL.createObjectURL(blob);
+
+    // Ставим blob: URL в атрибут — большинство uploaders поддерживают fetch(blobURL)
+    hexxBtn.setAttribute("hex-href", currentHexBlobURL);
+    console.log("hex-href set to blob:", currentHexBlobURL);
+  }
+
+  // Отзываем blob при выгрузке страницы
+  window.addEventListener('beforeunload', () => {
+    if (currentHexBlobURL) {
+      try { URL.revokeObjectURL(currentHexBlobURL); } catch (e) {}
+    }
+  });
+</script>
+
+
+
+
+<style>
+        .razmer{font-size:20px}
+</style>
+
+<form>
+  <label  class="razmer" for="select_file">Список Hex's</label>
+  <select class="razmer" name="uploader" id="select_file" onchange="prisvATRIBUT()">
+    <option value="">-- Выберите Hex-file --</option>
+    <option value="findPC">Выбрать с ПК</option>
+    <option value="./test/328p16mhz.hex">328p16mhz</option>
+    <option value="./test/168p16mhz.hex">168p16mhz</option>
+    <option value="./test/328p8mhz.hex">328p8mhz</option>
+    <option value="./test/168p8mhz.hex">168p8mhz</option>
+  </select> <br>
+  <input type="file" id="hexFile" accept=".hex" style="display:none" />
+  <br>
+  <label class="razmer" for="select_board">Список board's</label>
+  <select class="razmer" name="boards" id="select_board" onchange="prisvATRIBUT()">
+    <option value="">-- Выберите board --</option>
+    <option value="uno">uno</option>
+    <option value="nanoOldBootloader">Nano OldBL</option>
+    <option value="nano">Nano new</option>
+    <option value="proMini">ProMini</option>
+    
+  </select>
+</form>
+<br><br>
+<button class="razmer" id="hexx" arduino-uploader hex-href="./test/328p16mhz.hex" board="nano" verify>
+  Upload selected files [<span class="upload-progress"></span>]
+</button>
+
+
+
+
+<!-- === Serial Monitor UI === -->
+<style>
+  #serialMonitorWrap { border:1px solid #ddd; padding:12px; border-radius:8px; margin-top:18px; background:#fafafa; }
+  #serialOutput { width:100%; height:220px; resize:vertical; padding:8px; font-family: monospace; font-size:13px; background:#111; color:#e6e6e6; border-radius:6px; border:1px solid #333; overflow:auto; }
+  #serialControls { display:flex; gap:8px; margin-top:8px; align-items:center; flex-wrap:wrap; }
+  #serialControls input[type="text"] { padding:6px; border-radius:6px; border:1px solid #ccc; }
+  #serialControls button { padding:6px 10px; border-radius:6px; cursor:pointer; }
+  .small { font-size:13px; color:#555; }
+</style>
+
+<div id="serialMonitorWrap">
+  <div style="display:flex; justify-content:space-between; align-items:center;">
+    <h3 style="margin:0;">Serial Monitor</h3>
+    <div class="small">Web Serial API</div>
+  </div>
+
+  <div style="margin-top:8px;">
+    <textarea id="serialOutput" readonly></textarea>
+  </div>
+
+  <div id="serialControls">
+    <label class="small">Baud:
+      <select id="baudRate">
+        <option value="9600">9600</option>
+        <option value="57600">57600</option>
+        <option value="115200" selected>115200</option>
+      </select>
+    </label>
+
+    <button id="btnConnect">Connect</button>
+    <button id="btnDisconnect" disabled>Disconnect</button>
+
+    <button id="btnClear">Clear</button>
+    <button id="btnDownload">Download Log</button>
+
+    <div style="flex:1"></div>
+
+    <input type="text" id="sendText" placeholder="Text to send (use \\n for newline)" style="min-width:220px;">
+    <button id="btnSend">Send</button>
+  </div>
+
+  <div class="small" style="margin-top:8px;">
+    <label><input type="checkbox" id="autoScroll" checked> Auto-scroll</label>
+    &nbsp; • &nbsp; <label><input type="checkbox" id="showTimestamps"> Show timestamps</label>
+  </div>
+</div>
+
+<script>
+/*
+  Serial Monitor for Arduino Web Uploader
+  - uses navigator.serial
+  - reuses global `arduinoPort` if available, otherwise manages its own variable
+*/
+
+(async () => {
+  // Use existing arduinoPort if page set it earlier
+  let port = (window.arduinoPort) ? window.arduinoPort : null;
+  let reader = null;
+  let readLoopAbort = null;
+  let keepReading = false;
+  let logBuffer = []; // for download
+  const encoder = new TextEncoder();
+  const decoder = new TextDecoder();
+
+  const outEl = document.getElementById('serialOutput');
+  const btnConnect = document.getElementById('btnConnect');
+  const btnDisconnect = document.getElementById('btnDisconnect');
+  const btnClear = document.getElementById('btnClear');
+  const btnSend = document.getElementById('btnSend');
+  const btnDownload = document.getElementById('btnDownload');
+  const sendText = document.getElementById('sendText');
+  const baudSel = document.getElementById('baudRate');
+  const autoScroll = document.getElementById('autoScroll');
+  const showTimestamps = document.getElementById('showTimestamps');
+
+  function appendLog(text, isReceived = true) {
+    const ts = new Date();
+    const timeStr = ts.toLocaleTimeString();
+    const prefix = (showTimestamps.checked ? `[${timeStr}] ` : '');
+    outEl.value += prefix + text;
+    if (!text.endsWith('\n')) outEl.value += '\n';
+    if (autoScroll.checked) {
+      outEl.scrollTop = outEl.scrollHeight;
+    }
+    logBuffer.push({ts: ts.toISOString(), dir: isReceived ? 'rx' : 'tx', text});
+  }
+
+  async function openPortWithBaud(selectedPort, baudRate) {
+    if (!selectedPort) {
+      // let user pick if none provided
+      selectedPort = await navigator.serial.requestPort();
+    }
+    await selectedPort.open({ baudRate: Number(baudRate) });
+    port = selectedPort;
+    window.arduinoPort = port; // expose for other parts
+    btnConnect.disabled = true;
+    btnDisconnect.disabled = false;
+    startReadLoop();
+    appendLog(`--- Opened port at ${baudRate} baud ---`, false);
+  }
+
+  async function closePort() {
+    keepReading = false;
+    if (reader && readLoopAbort) {
+      readLoopAbort(); // signal to stop
+    }
+    try {
+      if (reader) { await reader.cancel().catch(()=>{}); reader = null; }
+      if (port && port.writable) {
+        // flush writer? close writer if exists (we write via getWriter each send)
+      }
+      if (port) {
+        await port.close();
+      }
+      appendLog('--- Port closed ---', false);
+    } catch (e) {
+      console.warn('Error closing port', e);
+    } finally {
+      btnConnect.disabled = false;
+      btnDisconnect.disabled = true;
+      window.arduinoPort = null;
+      port = null;
+    }
+  }
+
+  function startReadLoop() {
+    if (!port) return;
+    keepReading = true;
+    // create abort closure so we can break out
+    let aborted = false;
+    readLoopAbort = () => { aborted = true; };
+
+    (async () => {
+      try {
+        const textDecoder = new TextDecoderStream();
+        const readableStreamClosed = port.readable.pipeTo(textDecoder.writable);
+        const readerStream = textDecoder.readable.getReader();
+        reader = readerStream;
+
+        while (!aborted) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          if (value) {
+            appendLog(value, true);
+          }
+        }
+        try { await reader.releaseLock(); } catch(e){}
+      } catch (err) {
+        console.error('Read loop error', err);
+        appendLog('*** Read loop error: ' + err + ' ***', false);
+      } finally {
+        // if port still open, keep buttons in correct state
+      }
+    })();
+  }
+
+  async function sendToPort(text) {
+    if (!port) {
+      alert('No port open. Connect first.');
+      return;
+    }
+    // convert \n, \r sequences entered as literal \n into newline
+    const processed = text.replace(/\\n/g, '\n').replace(/\\r/g, '\r');
+    const writer = port.writable.getWriter();
+    try {
+      await writer.write(encoder.encode(processed));
+      appendLog(processed, false);
+    } catch (e) {
+      console.error('Write error', e);
+      appendLog('*** Write error: ' + e + ' ***', false);
+    } finally {
+      writer.releaseLock();
+    }
+  }
+
+  // button events
+  btnConnect.addEventListener('click', async () => {
+    try {
+      await openPortWithBaud(port, baudSel.value);
+    } catch (e) {
+      alert('Connect failed: ' + e);
+    }
+  });
+
+  btnDisconnect.addEventListener('click', async () => {
+    await closePort();
+  });
+
+  btnSend.addEventListener('click', async () => {
+    const txt = sendText.value;
+    if (!txt) return;
+    await sendToPort(txt);
+  });
+
+  sendText.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      btnSend.click();
+    }
+  });
+
+  btnClear.addEventListener('click', () => {
+    outEl.value = '';
+    logBuffer = [];
+  });
+
+  btnDownload.addEventListener('click', () => {
+    if (logBuffer.length === 0) {
+      alert('Log is empty');
+      return;
+    }
+    const lines = logBuffer.map(item => `${item.ts}\t${item.dir}\t${item.text.replace(/\n/g,'\\n')}`);
+    const blob = new Blob([lines.join('\n')], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'serial_log.txt';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  });
+
+  // If page already had a port open, start reading
+  if (window.arduinoPort && window.arduinoPort.readable) {
+    port = window.arduinoPort;
+    btnConnect.disabled = true;
+    btnDisconnect.disabled = false;
+    startReadLoop();
+  }
+
+})();
+</script>
+<!-- === end Serial Monitor UI === -->
+
+</body>
+
+</html>
