@@ -1,6 +1,6 @@
 /// <reference types="node" />
 import { PortFilters } from './Serial';
-declare type Board = {
+type Board = {
     signature: Buffer;
     pageSize: number;
     timeout: number;

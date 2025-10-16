@@ -1,5 +1,5 @@
 /// <reference types="node" />
-export declare type Port = {
+export type Port = {
     readable: ReadableStream;
     writable: WritableStream;
     open: (options: SerialOptions) => Promise<void>;
@@ -9,17 +9,17 @@ export declare type Port = {
         usbVendorId: number;
     };
 };
-export declare type PortFilters = {
+export type PortFilters = {
     filters?: {
         usbVendorId: number;
         usbProductId: number;
     }[];
 };
-export declare type NavigatorSerial = {
+export type NavigatorSerial = {
     requestPort: (optns: PortFilters) => Port;
     getPorts: () => Promise<Port[]>;
 };
-export declare type SerialOptions = {
+export type SerialOptions = {
     baudRate?: number;
     dataBits?: number;
     stopBits?: number;

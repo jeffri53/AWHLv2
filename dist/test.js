@@ -19,7 +19,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             catch (e) { }
             try {
-                await _1.upload(_1.boards[board], hexHref, onProgress, verify, portFilters);
+                await (0, _1.upload)(_1.boards[board], hexHref, onProgress, verify, portFilters);
             }
             catch (e) {
                 progressEl.innerHTML = 'Error!';
