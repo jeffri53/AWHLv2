@@ -5,13 +5,16 @@
   "types": "dist/index.d.ts",
   "license": "MIT",
   "author": {
-    "name": "David Buezas",
-    "email": "david.buezas@gmail.com",
-    "url": "https://github.com/dbuezas/arduino-web-uploader/"
+    "name": "Jeffri",
+    "email": "jeffri53@gmail.com",
+    "url": "https://github.com/jeffri53/AWHLv2"
   },
+  "homepage": "https://jeffri53.github.io/AWHLv2",
   "scripts": {
     "prepublish": "npm run build",
-    "build": "tsc && webpack"
+    "build": "cross-env NODE_OPTIONS=--openssl-legacy-provider tsc && webpack",
+    "predeploy": "npm run build",
+    "deploy": "gh-pages -d dist"
   },
   "devDependencies": {
     "@types/node": "^14.14.2",
@@ -19,12 +22,14 @@
     "@typescript-eslint/parser": "^4.5.0",
     "buffer": "^5.6.1",
     "eslint": "^7.12.0",
+    "gh-pages": "^6.3.0",
     "prettier": "^2.1.2",
     "process": "^0.11.10",
     "stream-browserify": "^3.0.0",
     "typescript": "^4.0.3",
     "webpack": "^5.2.0",
-    "webpack-cli": "^4.1.0"
+    "webpack-cli": "^4.1.0",
+    "cross-env": "^7.0.3"
   },
   "dependencies": {
     "async": "^3.2.0",
