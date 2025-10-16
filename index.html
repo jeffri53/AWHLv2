@@ -21,122 +21,91 @@
 
 
 <script>
-  function gebi(id){ return document.getElementById(id); }
+function gebi(id){ return document.getElementById(id); }
+let currentHexBlobURL = null;
 
-  // Храним текущий blob URL чтобы отозвать при следующем создании
-  let currentHexBlobURL = null;
+async function prisvATRIBUT() {
+  const select = gebi("select_file");
+  const fileInput = gebi("hexFile");
+  const hexxBtn = gebi("hexx");
 
-  async function prisvATRIBUT() {
-    const select = gebi("select_file");
-    const fileInput = gebi("hexFile");
-    const hexxBtn = gebi("hexx");
+  // Отзываем предыдущий blob
+  if (currentHexBlobURL) { URL.revokeObjectURL(currentHexBlobURL); currentHexBlobURL = null; }
 
-    // Отозвать предыдущий blob, если был
-    if (currentHexBlobURL) {
-      try { URL.revokeObjectURL(currentHexBlobURL); } catch(e){/*ignore*/ }
-      currentHexBlobURL = null;
-    }
+  const value = select.value;
 
-    const value = select.value;
-    if (value === "findPC") {
-      // Показываем input и ждём выбора файла
-      fileInput.style.display = "block";
+  if (value === "findPC") {
+    // Локальный файл
+    fileInput.style.display = "block";
+    if (fileInput.files && fileInput.files[0]) await handleFileAndSetBlob(fileInput.files[0]);
 
-      // если файл уже выбран — сразу обработаем
-      if (fileInput.files && fileInput.files[0]) {
-        await handleFileAndSetBlob(fileInput.files[0]);
-      }
+    fileInput.onchange = async () => {
+      if (fileInput.files && fileInput.files[0]) await handleFileAndSetBlob(fileInput.files[0]);
+    };
 
-      // set onchange to process selection
-      fileInput.onchange = async () => {
-        if (fileInput.files && fileInput.files[0]) {
-          await handleFileAndSetBlob(fileInput.files[0]);
-        }
-      };
-
-    } else if (value && (value.endsWith('.hex') || value.startsWith('./') || value.startsWith('/'))) {
-      // Предопределённый путь (./test/xyz.hex) — загрузим его fetch + сделаем blob
-      fileInput.style.display = "none";
-      try {
-        const resp = await fetch(value, { cache: "no-store" });
-        if (!resp.ok) throw new Error("Fetch failed: " + resp.status);
-        let text = await resp.text();
-        text = normalizeHexText(text);
-        setHexBlobFromText(text);
-        console.log("Loaded preset hex from", value, "len=", text.length);
-      } catch (e) {
-        console.error("Ошибка загрузки preset hex:", e);
-        alert("Ошибка загрузки preset hex: " + e.message);
-        // как fallback — укажем просто путь (если библиотека умеет работать с относительными URL)
-        hexxBtn.setAttribute("hex-href", value);
-      }
-
-    } else {
-      // Нет выбора — скрыть input и очистить атрибут
-      fileInput.style.display = "none";
-      hexxBtn.removeAttribute("hex-href");
-    }
-
-    // board selection
-    const boardsex = gebi("select_board").value;
-    hexxBtn.setAttribute("board", boardsex);
-    console.log("boardsex=", boardsex);
-  }
-
-  // Читает File объект, нормализует текст и создаёт blob URL
-  async function handleFileAndSetBlob(file) {
-    const hexxBtn = gebi("hexx");
+  } else if (value && value.endsWith(".hex")) {
+    // Предопределённый HEX (GitHub Pages)
+    fileInput.style.display = "none";
     try {
-      let text = await file.text();
+      const resp = await fetch(value, {cache:"no-store"});
+      if (!resp.ok) throw new Error("Fetch failed: " + resp.status);
+      let text = await resp.text();
       text = normalizeHexText(text);
       setHexBlobFromText(text);
-      console.log("Loaded local file:", file.name, "len=", text.length);
-      // уведомим библиотеку, если она слушает событие change
-      hexxBtn.dispatchEvent(new Event("change"));
-    } catch (e) {
-      console.error("Ошибка чтения файла:", e);
-      alert("Ошибка чтения файла: " + e.message);
-    }
-  }
-
-  // Нормализация: удаляем BOM, переводим CRLF -> LF, убираем лишние пробелы в конце/начале
-  function normalizeHexText(text) {
-    if (!text) return text;
-    // удалить возможный BOM
-    text = text.replace(/^\uFEFF/, '');
-    // Переводы строк в unix-стиль
-    text = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
-    // Убрать пустые строки вверх/вниз и лишние пробелы по краям строк
-    text = text.split('\n').map(line => line.trimRight()).join('\n').trim();
-    return text + '\n'; // гарантируем завершающий перевод строки
-  }
-
-  // Создаёт blob URL и ставит его в атрибут hex-href
-  function setHexBlobFromText(text) {
-    const hexxBtn = gebi("hexx");
-    // Safety: убедимся, что первая значимая буква ":" — если нет, покажем предупреждение
-    const firstCharCode = text.charCodeAt(0);
-    if (firstCharCode !== 58) { // 58 == ':'
-      console.warn("Первый символ файла не ':' (код " + firstCharCode + "). Проверь содержимое.");
-      // не останавливаем, всё равно создаём blob, чтобы библиотека попыталась распарсить
+      console.log("Loaded preset hex from", value, "len=", text.length);
+    } catch(e) {
+      console.error("Ошибка загрузки preset hex:", e);
+      alert("Ошибка загрузки preset hex: " + e.message);
+      // fallback: указываем путь напрямую
+      hexxBtn.setAttribute("hex-href", value);
     }
 
-    // Создаём blob, указываем тип text/plain
-    const blob = new Blob([text], { type: 'text/plain' });
-    currentHexBlobURL = URL.createObjectURL(blob);
-
-    // Ставим blob: URL в атрибут — большинство uploaders поддерживают fetch(blobURL)
-    hexxBtn.setAttribute("hex-href", currentHexBlobURL);
-    console.log("hex-href set to blob:", currentHexBlobURL);
+  } else {
+    fileInput.style.display = "none";
+    hexxBtn.removeAttribute("hex-href");
   }
 
-  // Отзываем blob при выгрузке страницы
-  window.addEventListener('beforeunload', () => {
-    if (currentHexBlobURL) {
-      try { URL.revokeObjectURL(currentHexBlobURL); } catch (e) {}
-    }
-  });
+  const boardsex = gebi("select_board").value;
+  hexxBtn.setAttribute("board", boardsex);
+  console.log("boardsex=", boardsex);
+}
+
+async function handleFileAndSetBlob(file) {
+  const hexxBtn = gebi("hexx");
+  try {
+    let text = await file.text();
+    text = normalizeHexText(text);
+    setHexBlobFromText(text);
+    console.log("Loaded local file:", file.name, "len=", text.length);
+    hexxBtn.dispatchEvent(new Event("change"));
+  } catch(e) {
+    console.error("Ошибка чтения файла:", e);
+    alert("Ошибка чтения файла: " + e.message);
+  }
+}
+
+function normalizeHexText(text) {
+  if (!text) return text;
+  text = text.replace(/^\uFEFF/, '');          // удалить BOM
+  text = text.replace(/\r\n/g, '\n').replace(/\r/g,'\n'); // CRLF → LF
+  text = text.split('\n').map(line => line.trimRight()).join('\n').trim();
+  return text + '\n'; // завершающий перевод строки
+}
+
+function setHexBlobFromText(text) {
+  const hexxBtn = gebi("hexx");
+  if (text.charCodeAt(0)!==58) console.warn("HEX не начинается с ':'");
+  const blob = new Blob([text], {type:'text/plain'});
+  currentHexBlobURL = URL.createObjectURL(blob);
+  hexxBtn.setAttribute("hex-href", currentHexBlobURL);
+  console.log("hex-href set to blob:", currentHexBlobURL);
+}
+
+window.addEventListener('beforeunload', () => {
+  if (currentHexBlobURL) URL.revokeObjectURL(currentHexBlobURL);
+});
 </script>
+
 
   
 
